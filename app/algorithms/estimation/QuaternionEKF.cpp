@@ -14,9 +14,9 @@
  ******************************************************************************
  */
 #include "QuaternionEKF.h"
-#include "arm_math.h"
 #include "MahonyAHRS.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <type_traits>
@@ -186,7 +186,7 @@ void alg::QuaternionEkf::XhatUpdateCb(ImuKf &kf)
     // 计算预测值和各个轴的方向余弦
     for (uint8_t i = 0; i < 3; i++)
     {
-        ins.orientation_cosine[i] = arm_cos_f32(fabsf(kf.TempVector().pData[i]));
+        ins.orientation_cosine[i] = std::cos(std::fabs(kf.TempVector().pData[i]));
     }
 
     // 利用加速度计数据修正
@@ -449,7 +449,7 @@ void QuaternionEkf::Update(float gx, float gy, float gz, float ax, float ay, flo
 
     // set z,单位化重力加速度向量
 
-	ins_.accl_norm = sqrtf(ins_.accel[0] * ins_.accel[0] + ins_.accel[1] * ins_.accel[1] + ins_.accel[2] * ins_.accel[2]);
+    ins_.accl_norm = std::sqrt(ins_.accel[0] * ins_.accel[0] + ins_.accel[1] * ins_.accel[1] + ins_.accel[2] * ins_.accel[2]);
     accel_inv_norm = 1.0f / ins_.accl_norm;
 
 
@@ -458,7 +458,7 @@ void QuaternionEkf::Update(float gx, float gy, float gz, float ax, float ay, flo
     ins_.imu_quaternion_ekf.MeasuredVector()[2] = ins_.accel[2] * accel_inv_norm;
 
     // get body state
-    ins_.gyro_norm = sqrtf(	ins_.gyro[0] * ins_.gyro[0] + ins_.gyro[1] * ins_.gyro[1] + ins_.gyro[2] * ins_.gyro[2]);
+    ins_.gyro_norm = std::sqrt(ins_.gyro[0] * ins_.gyro[0] + ins_.gyro[1] * ins_.gyro[1] + ins_.gyro[2] * ins_.gyro[2]);
 
 
     // 如果角速度小于阈值且加速度处于设定范围内,认为运动稳定,加速度可以用于修正角速度
@@ -491,14 +491,14 @@ void QuaternionEkf::Update(float gx, float gy, float gz, float ax, float ay, flo
     ins_.q[2] = ins_.imu_quaternion_ekf.FilteredValue()[2];
     ins_.q[3] = ins_.imu_quaternion_ekf.FilteredValue()[3];
 		
-    ins_.roll = atan2f(
+    ins_.roll = std::atan2(
         ins_.q[0] * ins_.q[1] + ins_.q[2] * ins_.q[3],
         0.5f - ins_.q[1] * ins_.q[1] - ins_.q[2] * ins_.q[2]
     );
 
     ins_.roll *= 57.29578f;
-    ins_.pitch = 57.29578f * asinf(-2.0f * (ins_.q[1] * ins_.q[3] - ins_.q[0] * ins_.q[2]));
-    ins_.yaw = atan2f(ins_.q[1] * ins_.q[2] + ins_.q[0] * ins_.q[3],
+    ins_.pitch = 57.29578f * std::asin(-2.0f * (ins_.q[1] * ins_.q[3] - ins_.q[0] * ins_.q[2]));
+    ins_.yaw = std::atan2(ins_.q[1] * ins_.q[2] + ins_.q[0] * ins_.q[3],
                       0.5f - ins_.q[2] * ins_.q[2] - ins_.q[3] * ins_.q[3]);
     ins_.yaw *= 57.29578f;
     ins_.gyro_bias[0] = ins_.imu_quaternion_ekf.FilteredValue()[4];

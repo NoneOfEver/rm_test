@@ -5,12 +5,31 @@
 
 #include "controller_pid.h"
 
-#include "bsp_dwt.h"
-
 #include <algorithm>
 #include <cmath>
 
+#include <zephyr/kernel.h>
+
 namespace alg {
+
+namespace {
+inline float get_delta_t_s(std::uint32_t &last_cycle) noexcept
+{
+    const std::uint32_t now = k_cycle_get_32();
+    float dt = 0.0f;
+
+    if (last_cycle != 0U) {
+        const std::uint32_t delta = now - last_cycle;
+        const std::uint32_t hz = sys_clock_hw_cycles_per_sec();
+        if (hz > 0U) {
+            dt = static_cast<float>(delta) / static_cast<float>(hz);
+        }
+    }
+
+    last_cycle = now;
+    return dt;
+}
+} // namespace
 
 bool ControllerPid::has_flag(std::uint8_t mask, Improve flag) noexcept
 {
@@ -166,7 +185,7 @@ float ControllerPid::update(float target, float now)
         pid_error_handle(pid_);
     }
 
-    pid_.dt = dwt_get_delta_t(&pid_.dwt_cnt);
+    pid_.dt = get_delta_t_s(pid_.dwt_cnt);
     if (pid_.dt <= 0.0f) {
         return pid_.output;
     }

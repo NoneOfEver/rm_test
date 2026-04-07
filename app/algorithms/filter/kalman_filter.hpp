@@ -11,24 +11,88 @@
 #include <cstdint>
 #include <cstring>
 
-#include "arm_math.h"
+#include "riscv_dsp_matrix_math.h"
 
-typedef arm_matrix_instance_f32 mat;
+typedef struct {
+    std::uint16_t numRows;
+    std::uint16_t numCols;
+    float *pData;
+} mat;
 
 namespace alg::kf {
 
-using Mat = ::arm_matrix_instance_f32;
+using Mat = ::mat;
+using Status = int32_t;
+
+constexpr Status kStatusOk = 0;
+constexpr Status kStatusSizeMismatch = -3;
+constexpr Status kStatusArgError = -1;
 
 inline void init(Mat &m, std::uint16_t rows, std::uint16_t cols, float *data)
 {
-    ::arm_mat_init_f32(&m, rows, cols, data);
+    m.numRows = rows;
+    m.numCols = cols;
+    m.pData = data;
 }
 
-inline arm_status add(const Mat &a, const Mat &b, Mat &out) { return ::arm_mat_add_f32(&a, &b, &out); }
-inline arm_status sub(const Mat &a, const Mat &b, Mat &out) { return ::arm_mat_sub_f32(&a, &b, &out); }
-inline arm_status mul(const Mat &a, const Mat &b, Mat &out) { return ::arm_mat_mult_f32(&a, &b, &out); }
-inline arm_status transpose(const Mat &a, Mat &out) { return ::arm_mat_trans_f32(&a, &out); }
-inline arm_status inverse(const Mat &a, Mat &out) { return ::arm_mat_inverse_f32(&a, &out); }
+inline Status add(const Mat &a, const Mat &b, Mat &out)
+{
+    if (a.numRows != b.numRows || a.numCols != b.numCols ||
+        out.numRows != a.numRows || out.numCols != a.numCols) {
+        return kStatusSizeMismatch;
+    }
+
+    riscv_dsp_mat_add_f32(a.pData, b.pData, out.pData, a.numRows, a.numCols);
+    return kStatusOk;
+}
+
+inline Status sub(const Mat &a, const Mat &b, Mat &out)
+{
+    if (a.numRows != b.numRows || a.numCols != b.numCols ||
+        out.numRows != a.numRows || out.numCols != a.numCols) {
+        return kStatusSizeMismatch;
+    }
+
+    riscv_dsp_mat_sub_f32(a.pData, b.pData, out.pData, a.numRows, a.numCols);
+    return kStatusOk;
+}
+
+inline Status mul(const Mat &a, const Mat &b, Mat &out)
+{
+    if (a.numCols != b.numRows || out.numRows != a.numRows || out.numCols != b.numCols) {
+        return kStatusSizeMismatch;
+    }
+
+    riscv_dsp_mat_mul_f32(a.pData, b.pData, out.pData, a.numRows, a.numCols, b.numCols);
+    return kStatusOk;
+}
+
+inline Status transpose(const Mat &a, Mat &out)
+{
+    if (out.numRows != a.numCols || out.numCols != a.numRows) {
+        return kStatusSizeMismatch;
+    }
+
+    riscv_dsp_mat_trans_f32(a.pData, out.pData, a.numRows, a.numCols);
+    return kStatusOk;
+}
+
+inline Status inverse(const Mat &a, Mat &out)
+{
+    if (a.numRows != a.numCols || out.numRows != a.numRows || out.numCols != a.numCols) {
+        return kStatusSizeMismatch;
+    }
+
+    constexpr std::size_t kMaxElems = 64;
+    const std::size_t elems = static_cast<std::size_t>(a.numRows) * a.numCols;
+    if (elems > kMaxElems) {
+        return kStatusArgError;
+    }
+
+    float src_copy[kMaxElems] = {0.0f};
+    std::memcpy(src_copy, a.pData, elems * sizeof(float));
+    return riscv_dsp_mat_inv_f32(src_copy, out.pData, a.numRows);
+}
 
 } // namespace alg::kf
 

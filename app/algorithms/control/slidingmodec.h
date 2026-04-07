@@ -20,8 +20,8 @@
 #ifndef SLIDINGMODEC_H_
 #define SLIDINGMODEC_H_
 
-#include "math.h"
-#include "stm32h7xx_hal.h"
+#include <cstdint>
+#include <cmath>
 
 class Smc{
  public:
