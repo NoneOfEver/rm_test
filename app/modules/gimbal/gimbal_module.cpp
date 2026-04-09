@@ -9,7 +9,7 @@
 namespace {
 
 K_THREAD_STACK_DEFINE(g_gimbal_module_stack, 1024);
-constexpr bool kBaselineTraceEnabled = true;
+constexpr bool kBaselineTraceEnabled = false;
 constexpr uint32_t kBaselineTracePeriod = 500U;
 
 }  // namespace

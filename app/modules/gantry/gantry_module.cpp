@@ -14,7 +14,7 @@
 namespace {
 
 K_THREAD_STACK_DEFINE(g_gantry_module_stack, 1024);
-constexpr bool kBaselineTraceEnabled = true;
+constexpr bool kBaselineTraceEnabled = false;
 constexpr uint32_t kBaselineTracePeriod = 500U;
 
 float UIntToFloat(uint16_t raw, float min_value, float max_value, uint8_t bits)

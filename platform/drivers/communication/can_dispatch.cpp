@@ -203,11 +203,14 @@ int Initialize()
 		return 0;
 	}
 
+	bool has_any_bus = false;
 	for (uint8_t bus = 1U; bus <= kBusCount; ++bus) {
 		g_can_dev[bus - 1U] = FindCanDeviceForBus(bus);
 		if (g_can_dev[bus - 1U] == nullptr) {
-			return -ENODEV;
+			continue;
 		}
+
+		has_any_bus = true;
 
 		const int rc = can_start(g_can_dev[bus - 1U]);
 		if ((rc != 0) && (rc != -EALREADY)) {
@@ -218,6 +221,10 @@ int Initialize()
 		if (filter_rc != 0) {
 			return filter_rc;
 		}
+	}
+
+	if (!has_any_bus) {
+		return -ENODEV;
 	}
 
 	k_thread_create(&g_can_dispatch_thread,
