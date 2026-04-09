@@ -33,7 +33,7 @@
 - `app/debug/`：shell、tracing、调试命令接入
 - `app/modules/`：C++ 功能模块，各模块持有自己的线程或工作上下文
 - `app/channels/`：基于官方 `zbus` 的 channel 与消息载荷定义
-- `app/protocols/`：上层链路协议逻辑，如 `mcu_link`、`pc_link`
+- `app/protocols/`：上层链路协议逻辑，如 `pc_link`
 - `app/algorithms/`：控制、滤波、估计、数学工具
 - `platform/board/`：板级辅助适配
 - `platform/drivers/communication/`：CAN/UART/USB 等传输适配
