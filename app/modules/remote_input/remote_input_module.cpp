@@ -2,10 +2,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <errno.h>
+
+#include <ctype.h>
+#include <stdio.h>
+#include <string.h>
+
 #include <zephyr/sys/printk.h>
 
 #include <app/modules/remote_input/remote_input_module.h>
 #include <app/bootstrap/thread_utils.h>
+#include <app/protocols/remote_input/dr16_protocol.h>
+#include <app/protocols/remote_input/vt03_protocol.h>
 
 namespace {
 
@@ -19,6 +27,11 @@ int RemoteInputModule::Initialize()
 {
 	publish_sequence_ = 0U;
 	started_ = false;
+	latest_input_ = {};
+	latest_input_valid_ = false;
+	line_pos_ = 0U;
+	line_buf_[0] = '\0';
+	binary_len_ = 0U;
 	return 0;
 }
 
@@ -44,18 +57,19 @@ void RemoteInputModule::RunLoop()
 {
 	printk("remote_input module started\n");
 
-	channels::RemoteInputMessage input = {};
 	channels::ChassisCommandMessage chassis_command = {};
 	channels::ArmCommandMessage arm_command = {};
 	channels::GimbalCommandMessage gimbal_command = {};
 	channels::GantryCommandMessage gantry_command = {};
 
 	while (true) {
-		if (zbus_chan_read(&rm_test_remote_input_chan, &input, K_NO_WAIT) == 0) {
-			chassis_command = ComposeChassisCommand(input);
-			arm_command = ComposeArmCommand(input);
-			gimbal_command = ComposeGimbalCommand(input);
-			gantry_command = ComposeGantryCommand(input);
+		DecodeUartFramesInQueue();
+
+		if (latest_input_valid_) {
+			chassis_command = ComposeChassisCommand(latest_input_);
+			arm_command = ComposeArmCommand(latest_input_);
+			gimbal_command = ComposeGimbalCommand(latest_input_);
+			gantry_command = ComposeGantryCommand(latest_input_);
 		} else {
 			chassis_command = {};
 			arm_command = {};
@@ -78,6 +92,183 @@ void RemoteInputModule::RunLoop()
 		(void)zbus_chan_pub(&rm_test_gimbal_command_chan, &gimbal_command, K_NO_WAIT);
 		(void)zbus_chan_pub(&rm_test_gantry_command_chan, &gantry_command, K_NO_WAIT);
 		k_sleep(K_MSEC(1));
+	}
+}
+
+int RemoteInputModule::ParseLine(const char *line, channels::RemoteInputMessage *out)
+{
+	if ((line == nullptr) || (out == nullptr)) {
+		return -EINVAL;
+	}
+
+	char type[8] = {0};
+	float a = 0.0f;
+	float b = 0.0f;
+	float c = 0.0f;
+	int en = 0;
+
+	if (sscanf(line, "%7s %f %f %f %d", type, &a, &b, &c, &en) != 5) {
+		return -EINVAL;
+	}
+
+	if (strcmp(type, "dr16") == 0) {
+		out->source = channels::kRemoteInputDr16;
+		out->axis_lx = a;
+		out->axis_ly = b;
+		out->axis_wheel = c;
+		out->axis_jx = 0.0f;
+		out->axis_jy = 0.0f;
+		out->axis_jz = 0.0f;
+	} else if (strcmp(type, "vt03") == 0) {
+		out->source = channels::kRemoteInputVt03;
+		out->axis_jx = a;
+		out->axis_jy = b;
+		out->axis_jz = c;
+		out->axis_lx = 0.0f;
+		out->axis_ly = 0.0f;
+		out->axis_wheel = 0.0f;
+	} else {
+		return -EINVAL;
+	}
+
+	out->chassis_enable = (en != 0) ? 1U : 0U;
+	out->sequence = ++publish_sequence_;
+	return 0;
+}
+
+void RemoteInputModule::ConsumeBinary(size_t bytes)
+{
+	if ((bytes == 0U) || (binary_len_ == 0U)) {
+		return;
+	}
+
+	if (bytes >= binary_len_) {
+		binary_len_ = 0U;
+		return;
+	}
+
+	memmove(binary_buf_, binary_buf_ + bytes, binary_len_ - bytes);
+	binary_len_ -= bytes;
+}
+
+void RemoteInputModule::TryDecodeBinaryFrames()
+{
+	while (binary_len_ > 0U) {
+		channels::RemoteInputMessage input = {};
+
+		if ((binary_len_ >= protocols::remote_input::vt03::kRemoteFrameLength) &&
+		    (binary_buf_[0] == 0xa9U) && (binary_buf_[1] == 0x53U)) {
+			protocols::remote_input::vt03::Vt03Frame vt03_frame = {};
+			if (protocols::remote_input::vt03::DecodeRemoteFrame(binary_buf_, binary_len_, &vt03_frame)) {
+				input.source = channels::kRemoteInputVt03;
+				input.axis_jx = vt03_frame.left_y;
+				input.axis_jy = vt03_frame.left_x;
+				input.axis_jz = vt03_frame.wheel;
+				input.chassis_enable = vt03_frame.chassis_enable ? 1U : 0U;
+				input.sequence = ++publish_sequence_;
+				latest_input_ = input;
+				latest_input_valid_ = true;
+				(void)zbus_chan_pub(&rm_test_remote_input_chan, &input, K_NO_WAIT);
+				ConsumeBinary(protocols::remote_input::vt03::kRemoteFrameLength);
+				continue;
+			}
+			ConsumeBinary(1U);
+			continue;
+		}
+
+		if ((binary_len_ >= protocols::remote_input::vt03::kCustomFrameLength) &&
+		    (binary_buf_[0] == 0xa5U)) {
+			protocols::remote_input::vt03::Vt03CustomFrame custom = {};
+			if (protocols::remote_input::vt03::DecodeCustomFrame(binary_buf_, binary_len_, &custom)) {
+				input.source = channels::kRemoteInputVt03;
+				input.axis_jx = custom.joystick_x;
+				input.axis_jy = custom.joystick_y;
+				input.axis_jz = custom.joystick_z;
+				input.chassis_enable = custom.chassis_enable ? 1U : 0U;
+				input.sequence = ++publish_sequence_;
+				latest_input_ = input;
+				latest_input_valid_ = true;
+				(void)zbus_chan_pub(&rm_test_remote_input_chan, &input, K_NO_WAIT);
+				ConsumeBinary(protocols::remote_input::vt03::kCustomFrameLength);
+				continue;
+			}
+		}
+
+		if (binary_len_ >= protocols::remote_input::dr16::kFrameLength) {
+			protocols::remote_input::dr16::Dr16Frame dr16_frame = {};
+			if (protocols::remote_input::dr16::DecodeFrame(binary_buf_, binary_len_, &dr16_frame)) {
+				input.source = channels::kRemoteInputDr16;
+				input.axis_lx = dr16_frame.left_stick_x;
+				input.axis_ly = dr16_frame.left_stick_y;
+				input.axis_wheel = dr16_frame.wheel;
+				input.chassis_enable = dr16_frame.chassis_enable ? 1U : 0U;
+				input.sequence = ++publish_sequence_;
+				latest_input_ = input;
+				latest_input_valid_ = true;
+				(void)zbus_chan_pub(&rm_test_remote_input_chan, &input, K_NO_WAIT);
+				ConsumeBinary(protocols::remote_input::dr16::kFrameLength);
+				continue;
+			}
+		}
+
+		if (binary_len_ < protocols::remote_input::dr16::kFrameLength) {
+			break;
+		}
+
+		ConsumeBinary(1U);
+	}
+}
+
+void RemoteInputModule::DecodeUartFramesInQueue()
+{
+	while (true) {
+		channels::uart_raw_frame_queue::UartRawFrameMessage frame = {};
+		if (channels::uart_raw_frame_queue::DequeueForRemoteInput(&frame) != 0) {
+			break;
+		}
+
+		for (uint8_t i = 0U; i < frame.len; ++i) {
+			const uint8_t byte = frame.data[i];
+
+			if (binary_len_ < kBinaryBufSize) {
+				binary_buf_[binary_len_++] = byte;
+			} else {
+				memmove(binary_buf_, binary_buf_ + 1, kBinaryBufSize - 1U);
+				binary_buf_[kBinaryBufSize - 1U] = byte;
+			}
+
+			TryDecodeBinaryFrames();
+
+			if (byte == '\r') {
+				continue;
+			}
+
+			if (byte == '\n') {
+				line_buf_[line_pos_] = '\0';
+				if (line_pos_ > 0U) {
+					channels::RemoteInputMessage input = {};
+					if (ParseLine(line_buf_, &input) == 0) {
+						latest_input_ = input;
+						latest_input_valid_ = true;
+						(void)zbus_chan_pub(&rm_test_remote_input_chan, &input, K_NO_WAIT);
+					}
+				}
+				line_pos_ = 0U;
+				line_buf_[0] = '\0';
+				continue;
+			}
+
+			if (isprint(byte) == 0) {
+				continue;
+			}
+
+			if (line_pos_ < (kLineBufSize - 1U)) {
+				line_buf_[line_pos_++] = static_cast<char>(byte);
+			} else {
+				line_pos_ = 0U;
+				line_buf_[0] = '\0';
+			}
+		}
 	}
 }
 

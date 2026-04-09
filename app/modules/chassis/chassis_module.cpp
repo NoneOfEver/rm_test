@@ -13,6 +13,8 @@
 namespace {
 
 K_THREAD_STACK_DEFINE(g_chassis_module_stack, 1024);
+constexpr bool kBaselineTraceEnabled = true;
+constexpr uint32_t kBaselineTracePeriod = 500U;
 
 }  // namespace
 
@@ -22,6 +24,7 @@ int ChassisModule::Initialize()
 {
 	state_ = {};
 	publish_sequence_ = 0U;
+	idle_ticks_ = 0U;
 	started_ = false;
 	(void)k_mutex_init(&pid_mutex_);
 
@@ -37,6 +40,26 @@ int ChassisModule::Initialize()
 	}
 
 	return SetSpeedPidTuning(kPidKp, kPidKi, kPidKd, kIntegralLimit, kCurrentLimit);
+}
+
+float ChassisModule::Clamp(float value, float lower, float upper)
+{
+	if (value < lower) {
+		return lower;
+	}
+	if (value > upper) {
+		return upper;
+	}
+	return value;
+}
+
+void ChassisModule::ResetTargetsAndPid()
+{
+	state_.wheel1_target_omega = 0.0f;
+	state_.wheel2_target_omega = 0.0f;
+	state_.wheel3_target_omega = 0.0f;
+	state_.wheel4_target_omega = 0.0f;
+	(void)ResetSpeedPidIntegrator();
 }
 
 int ChassisModule::SetSpeedPidTuning(float kp, float ki, float kd, float i_limit, float out_limit)
@@ -118,10 +141,16 @@ void ChassisModule::RunLoop()
 	channels::ChassisCommandMessage command = {};
 
 	while (true) {
-		RefreshMotorFeedbackSnapshot();
+		DecodeCanFramesInQueue();
 
 		if (zbus_chan_read(&rm_test_chassis_command_chan, &command, K_NO_WAIT) == 0) {
+			idle_ticks_ = 0U;
 			UpdateStateFromCommand(command);
+		} else {
+			++idle_ticks_;
+			if (idle_ticks_ > kNoCommandStopTicks) {
+				ResetTargetsAndPid();
+			}
 		}
 
 		ApplyWheelSpeedPidAndSend();
@@ -132,31 +161,64 @@ void ChassisModule::RunLoop()
 	}
 }
 
-void ChassisModule::RefreshMotorFeedbackSnapshot()
+void ChassisModule::DecodeCanFramesInQueue()
 {
-	static constexpr uint16_t kMotorCanId[4] = {0x201, 0x202, 0x203, 0x204};
-
-	for (int i = 0; i < 4; ++i) {
-		rm_test::app::channels::MotorFeedbackMessage feedback = {};
-		if (rm_test::app::protocols::motors::dji::GetLatestState(
-			    kMotorCanId[i],
-			    &feedback) == 0) {
-			motor_feedback_[i] = feedback;
-			motor_feedback_valid_[i] = true;
+	while (true) {
+		rm_test::app::channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
+		if (rm_test::app::channels::can_raw_frame_queue::DequeueForChassis(&frame) != 0) {
+			break;
 		}
+
+		if (frame.bus != 1U) {
+			continue;
+		}
+
+		if ((frame.can_id < 0x201U) || (frame.can_id > 0x204U)) {
+			continue;
+		}
+
+		rm_test::app::protocols::motors::dji::DjiMotorFeedback decoded = {};
+		if (rm_test::app::protocols::motors::dji::DecodeFeedback(frame.data, frame.dlc, &decoded) != 0) {
+			continue;
+		}
+
+		const int idx = static_cast<int>(frame.can_id - 0x201U);
+		if ((idx < 0) || (idx >= 4)) {
+			continue;
+		}
+
+		motor_feedback_[idx].bus = frame.bus;
+		motor_feedback_[idx].can_id = frame.can_id;
+		motor_feedback_[idx].encoder = decoded.encoder;
+		motor_feedback_[idx].omega = decoded.omega;
+		motor_feedback_[idx].current = decoded.current;
+		motor_feedback_[idx].temperature = decoded.temperature;
+		motor_feedback_valid_[idx] = true;
 	}
 }
 
 void ChassisModule::UpdateStateFromCommand(const channels::ChassisCommandMessage &command)
 {
-	const float vx = command.target_vx;
-	const float vy = command.target_vy;
-	const float wz = command.target_wz;
+	const float vx = Clamp(command.target_vx, -kCommandVxLimit, kCommandVxLimit);
+	const float vy = Clamp(command.target_vy, -kCommandVyLimit, kCommandVyLimit);
+	const float wz = Clamp(command.target_wz, -kCommandWzLimit, kCommandWzLimit);
 
-	state_.wheel1_target_omega = (+kKinematicsFactor * vx - kKinematicsFactor * vy) + wz;
-	state_.wheel2_target_omega = (-kKinematicsFactor * vx - kKinematicsFactor * vy) + wz;
-	state_.wheel3_target_omega = (-kKinematicsFactor * vx + kKinematicsFactor * vy) + wz;
-	state_.wheel4_target_omega = (+kKinematicsFactor * vx + kKinematicsFactor * vy) + wz;
+	state_.wheel1_target_omega = Clamp(
+		(+kKinematicsFactor * vx - kKinematicsFactor * vy) + wz,
+		-kWheelTargetOmegaLimit,
+		kWheelTargetOmegaLimit);
+	state_.wheel2_target_omega = Clamp(
+		(-kKinematicsFactor * vx - kKinematicsFactor * vy) + wz,
+		-kWheelTargetOmegaLimit,
+		kWheelTargetOmegaLimit);
+	state_.wheel3_target_omega = Clamp(
+		(-kKinematicsFactor * vx + kKinematicsFactor * vy) + wz,
+		-kWheelTargetOmegaLimit,
+		kWheelTargetOmegaLimit);
+	state_.wheel4_target_omega = Clamp(
+		(+kKinematicsFactor * vx + kKinematicsFactor * vy) + wz,
+		-kWheelTargetOmegaLimit,
+		kWheelTargetOmegaLimit);
 }
 
 void ChassisModule::ApplyWheelSpeedPidAndSend()
@@ -182,8 +244,29 @@ void ChassisModule::ApplyWheelSpeedPidAndSend()
 	k_mutex_unlock(&pid_mutex_);
 
 	(void)rm_test::app::services::actuator::SendMotorCurrent(
+		rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan1,
 		rm_test::app::services::actuator::MotorCurrentGroup::kDji0x200,
 		current_cmd);
+
+	if (kBaselineTraceEnabled) {
+		static uint32_t trace_tick = 0U;
+		if ((++trace_tick % kBaselineTracePeriod) == 0U) {
+			printk("[baseline][chassis] tgt=(%.2f %.2f %.2f %.2f) meas=(%d %d %d %d) cur=(%d %d %d %d) idle=%u\n",
+			       static_cast<double>(target[0]),
+			       static_cast<double>(target[1]),
+			       static_cast<double>(target[2]),
+			       static_cast<double>(target[3]),
+			       static_cast<int>(motor_feedback_[0].omega),
+			       static_cast<int>(motor_feedback_[1].omega),
+			       static_cast<int>(motor_feedback_[2].omega),
+			       static_cast<int>(motor_feedback_[3].omega),
+			       static_cast<int>(current_cmd[0]),
+			       static_cast<int>(current_cmd[1]),
+			       static_cast<int>(current_cmd[2]),
+			       static_cast<int>(current_cmd[3]),
+			       static_cast<unsigned int>(idle_ticks_));
+		}
+	}
 }
 
 }  // namespace rm_test::app::modules::chassis

@@ -4,6 +4,7 @@
 
 #include <app/bootstrap/thread_utils.h>
 #include <app/modules/referee/referee_module.h>
+#include <app/channels/uart_raw_frame_queue.h>
 #include <platform/drivers/devices/system/referee_client.h>
 
 namespace {
@@ -45,11 +46,27 @@ void RefereeModule::RunLoop()
 
 	rm_test::app::channels::RefereeStateMessage state = {};
 	while (true) {
+		DecodeUartFramesInQueue();
+
 		if (rm_test::platform::drivers::devices::system::referee_client::GetLatestState(&state) == 0) {
 			state.sequence = ++sequence_;
 			(void)zbus_chan_pub(&rm_test_referee_state_chan, &state, K_NO_WAIT);
 		}
 		k_sleep(K_MSEC(20));
+	}
+}
+
+void RefereeModule::DecodeUartFramesInQueue()
+{
+	while (true) {
+		rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage frame = {};
+		if (rm_test::app::channels::uart_raw_frame_queue::DequeueForReferee(&frame) != 0) {
+			break;
+		}
+
+		(void)rm_test::platform::drivers::devices::system::referee_client::FeedBytes(
+			frame.data,
+			frame.len);
 	}
 }
 

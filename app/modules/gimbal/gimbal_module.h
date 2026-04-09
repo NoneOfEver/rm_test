@@ -25,9 +25,10 @@ private:
 	static constexpr float kYawMax = 180.0f;
 	static constexpr float kPitchMin = -30.0f;
 	static constexpr float kPitchMax = 45.0f;
-	static constexpr uint8_t kYawServoId = 1U;
-	static constexpr uint8_t kPitchServoId = 2U;
+	static constexpr uint8_t kDefaultYawServoId = 1U;
+	static constexpr uint8_t kDefaultPitchServoId = 2U;
 	static constexpr uint16_t kServoMoveTimeMs = 20U;
+	static constexpr uint32_t kNoCommandStopTicks = 100U;
 
 	void RunLoop();
 	void HandleCommand(const channels::GimbalCommandMessage &command);
@@ -36,6 +37,13 @@ private:
 	struct k_thread thread_;
 	bool started_ = false;
 	bool servo_ready_ = false;
+	bool servo_stopped_ = false;
+	bool yaw_servo_online_ = false;
+	bool pitch_servo_online_ = false;
+	uint8_t command_enable_ = 0U;
+	uint32_t idle_ticks_ = 0U;
+	uint8_t yaw_servo_id_ = kDefaultYawServoId;
+	uint8_t pitch_servo_id_ = kDefaultPitchServoId;
 	float yaw_angle_deg_ = 0.0f;
 	float pitch_angle_deg_ = 0.0f;
 	uint32_t state_sequence_ = 0U;

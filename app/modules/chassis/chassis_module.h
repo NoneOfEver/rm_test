@@ -8,6 +8,7 @@
 #include <zephyr/kernel.h>
 
 #include <app/bootstrap/module.h>
+#include <app/channels/can_raw_frame_queue.h>
 #include <app/algorithms/control/alg_pid.h>
 #include <app/channels/chassis_command_channel.h>
 #include <app/channels/chassis_state_channel.h>
@@ -29,20 +30,28 @@ public:
 
 private:
 	static constexpr float kKinematicsFactor = 0.707107f;
-	static constexpr float kPidKp = 120.0f;
-	static constexpr float kPidKi = 8.0f;
+	static constexpr float kPidKp = 3.0f;
+	static constexpr float kPidKi = 0.2f;
 	static constexpr float kPidKd = 0.0f;
 	static constexpr float kIntegralLimit = 500.0f;
 	static constexpr float kCurrentLimit = 16384.0f;
+	static constexpr float kCommandVxLimit = 20.0f;
+	static constexpr float kCommandVyLimit = 20.0f;
+	static constexpr float kCommandWzLimit = 20.0f;
+	static constexpr float kWheelTargetOmegaLimit = 40.0f;
+	static constexpr uint32_t kNoCommandStopTicks = 100U;
 
 	void RunLoop();
 	void UpdateStateFromCommand(const channels::ChassisCommandMessage &command);
-	void RefreshMotorFeedbackSnapshot();
+	void DecodeCanFramesInQueue();
 	void ApplyWheelSpeedPidAndSend();
+	void ResetTargetsAndPid();
+	static float Clamp(float value, float lower, float upper);
 
 	struct k_thread thread_;
 	bool started_ = false;
 	uint32_t publish_sequence_ = 0U;
+	uint32_t idle_ticks_ = 0U;
 	channels::ChassisStateMessage state_ = {};
 	channels::MotorFeedbackMessage motor_feedback_[4] = {};
 	bool motor_feedback_valid_[4] = {false, false, false, false};

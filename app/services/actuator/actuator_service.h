@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 
+#include <platform/drivers/communication/can_dispatch.h>
+
 namespace rm_test::app::services::actuator {
 
 enum class MotorCurrentGroup : uint8_t {
@@ -14,9 +16,13 @@ enum class MotorCurrentGroup : uint8_t {
 	kDji0x1ff,
 };
 
-int SendMotorCurrent(MotorCurrentGroup group, const int16_t current_cmd[4]);
-int SendDjiCurrentGroup200(const int16_t current_cmd[4]);
-int SendDjiCurrentGroup1ff(const int16_t current_cmd[4]);
+int SendMotorCurrent(rm_test::platform::drivers::communication::can_dispatch::CanBus bus,
+		     MotorCurrentGroup group,
+		     const int16_t current_cmd[4]);
+int SendDjiCurrentGroup200(rm_test::platform::drivers::communication::can_dispatch::CanBus bus,
+			   const int16_t current_cmd[4]);
+int SendDjiCurrentGroup1ff(rm_test::platform::drivers::communication::can_dispatch::CanBus bus,
+			   const int16_t current_cmd[4]);
 
 }  // namespace rm_test::app::services::actuator
 

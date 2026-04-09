@@ -18,6 +18,7 @@ public:
 
 private:
 	void RunLoop();
+	void DecodeUartFramesInQueue();
 
 	struct k_thread thread_;
 	bool started_ = false;

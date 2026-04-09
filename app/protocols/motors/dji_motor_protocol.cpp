@@ -157,8 +157,6 @@ int WriteCurrentCommandToSlot(uint16_t motor_can_id, int16_t current_cmd, uint8_
 	int slot = -1;
 	if ((motor_can_id >= 0x201U) && (motor_can_id <= 0x204U)) {
 		slot = static_cast<int>(motor_can_id - 0x201U);
-	} else if ((motor_can_id >= 0x205U) && (motor_can_id <= 0x208U)) {
-		slot = static_cast<int>(motor_can_id - 0x205U);
 	} else {
 		return -EINVAL;
 	}

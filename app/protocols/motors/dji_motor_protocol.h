@@ -25,7 +25,7 @@ int GetLatestState(uint16_t can_id, rm_test::app::channels::MotorFeedbackMessage
 
 // Pack 4 motor currents for CAN ID 0x200 (0x201~0x204).
 int EncodeCurrentFrame0x200(const int16_t current_cmd[4], uint8_t out[8]);
-// Pack 4 motor currents for CAN ID 0x1FF (0x205~0x208).
+// Pack 4 motor currents for CAN ID 0x1FF.
 int EncodeCurrentFrame0x1ff(const int16_t current_cmd[4], uint8_t out[8]);
 
 // Write one motor current command into a 0x200/0x1FF payload slot.

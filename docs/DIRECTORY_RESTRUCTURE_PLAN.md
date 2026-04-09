@@ -71,7 +71,7 @@ applications/rm_test/
       channels/                 # 仅消息定义和 zbus channel 定义
       modules/                  # 业务模块（chassis/remote_input/...）
       services/                 # 应用服务（actuator/tuning/runtime facade）
-      protocols/                # 协议编解码（motors/mcu_link/pc_link）
+      protocols/                # 协议编解码（motors/pc_link）
 
     platform/
       board/

@@ -53,7 +53,9 @@ int EncodeCurrentFrame(const CurrentDispatchEntry *entry,
 
 }  // namespace
 
-int SendMotorCurrent(MotorCurrentGroup group, const int16_t current_cmd[4])
+int SendMotorCurrent(rm_test::platform::drivers::communication::can_dispatch::CanBus bus,
+		     MotorCurrentGroup group,
+		     const int16_t current_cmd[4])
 {
 	if (current_cmd == nullptr) {
 		return -EINVAL;
@@ -71,22 +73,29 @@ int SendMotorCurrent(MotorCurrentGroup group, const int16_t current_cmd[4])
 	}
 
 	#if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && CONFIG_RM_TEST_RUNTIME_INIT_CAN
-	return rm_test::platform::drivers::communication::can_dispatch::SendStdData(entry->can_id, frame, 8U);
+	return rm_test::platform::drivers::communication::can_dispatch::SendStdDataOnBus(
+		bus,
+		entry->can_id,
+		frame,
+		8U);
 	#else
 	ARG_UNUSED(frame);
 	ARG_UNUSED(entry);
+	ARG_UNUSED(bus);
 	return -ENOTSUP;
 	#endif
 }
 
-int SendDjiCurrentGroup200(const int16_t current_cmd[4])
+int SendDjiCurrentGroup200(rm_test::platform::drivers::communication::can_dispatch::CanBus bus,
+			   const int16_t current_cmd[4])
 {
-	return SendMotorCurrent(MotorCurrentGroup::kDji0x200, current_cmd);
+	return SendMotorCurrent(bus, MotorCurrentGroup::kDji0x200, current_cmd);
 }
 
-int SendDjiCurrentGroup1ff(const int16_t current_cmd[4])
+int SendDjiCurrentGroup1ff(rm_test::platform::drivers::communication::can_dispatch::CanBus bus,
+			   const int16_t current_cmd[4])
 {
-	return SendMotorCurrent(MotorCurrentGroup::kDji0x1ff, current_cmd);
+	return SendMotorCurrent(bus, MotorCurrentGroup::kDji0x1ff, current_cmd);
 }
 
 }  // namespace rm_test::app::services::actuator

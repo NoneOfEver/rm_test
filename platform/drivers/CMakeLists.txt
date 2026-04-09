@@ -10,6 +10,10 @@ if(CONFIG_RM_TEST_RUNTIME_INIT_CAN)
     ${CMAKE_CURRENT_SOURCE_DIR}/communication/can_dispatch.cpp
   )
   target_sources(app PRIVATE ${RM_TEST_CAN_SOURCES})
+else()
+  target_sources(app PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/communication/can_dispatch_stub.cpp
+  )
 endif()
 
 if(CONFIG_RM_TEST_RUNTIME_INIT_USB)

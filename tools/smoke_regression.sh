@@ -3,10 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 WS_DIR="$(cd "$ROOT_DIR/../.." && pwd)"
-BUILD_DIR="$WS_DIR/build"
+BUILD_DIR="$ROOT_DIR/build"
 BOARD="hpm6e00evk_v2"
 TMP_BUILD_DIR="/tmp/rm_test_smoke_can_off"
 OVERLAY_FILE="/tmp/rm_test_smoke_can_off.conf"
+TMP_LOG_DIR="/tmp/rm_test_smoke_logs"
 
 PASS_COUNT=0
 
@@ -17,6 +18,20 @@ pass() {
 
 fail() {
   echo "[FAIL] $1" >&2
+  exit 1
+}
+
+run_cmd() {
+  local title="$1"
+  shift
+  local log_file="$TMP_LOG_DIR/${title// /_}.log"
+  if "$@" >"$log_file" 2>&1; then
+    return 0
+  fi
+
+  echo "[FAIL] $title" >&2
+  echo "---- tail of $log_file ----" >&2
+  tail -n 120 "$log_file" >&2 || true
   exit 1
 }
 
@@ -34,6 +49,8 @@ check_file_contains() {
 echo "== rm_test smoke regression =="
 echo "ROOT_DIR=$ROOT_DIR"
 echo "WS_DIR=$WS_DIR"
+rm -rf "$TMP_BUILD_DIR"
+mkdir -p "$TMP_LOG_DIR"
 
 echo "-- [1/5] Static contract checks"
 check_file_contains "$ROOT_DIR/app/bootstrap/src/bootstrap.cpp" "InitializeInfrastructure\\(" "Bootstrap calls runtime infrastructure init"
@@ -48,9 +65,12 @@ check_file_contains "$ROOT_DIR/app/modules/modules_registry.cpp" "CONFIG_RM_TEST
 check_file_contains "$ROOT_DIR/app/modules/modules_registry.cpp" "CONFIG_RM_TEST_MODULE_REFEREE" "Referee module is config-gated"
 check_file_contains "$ROOT_DIR/app/debug/shell/chassis_tuning_shell.cpp" "SHELL_CMD\\(status, NULL, \"Show chassis tuning provider status\"" "Shell exposes chassis pid status command"
 check_file_contains "$ROOT_DIR/app/services/chassis/chassis_tuning_service.h" "bool HasProvider\\(\\)" "Tuning service provides provider state query"
+check_file_contains "$ROOT_DIR/app/modules/arm/arm_module.cpp" "\\[baseline\\]\\[arm\\]" "Arm baseline trace exists"
+check_file_contains "$ROOT_DIR/app/modules/gimbal/gimbal_module.cpp" "\\[baseline\\]\\[gimbal\\]" "Gimbal baseline trace exists"
+check_file_contains "$ROOT_DIR/app/modules/gimbal/gimbal_module.cpp" "yid=%u pid=%u yon=%u pon=%u" "Gimbal baseline includes runtime servo id and online state"
 
 echo "-- [2/5] Build default configuration"
-cmake --build "$BUILD_DIR" -j8 >/dev/null
+run_cmd "build_default" cmake --build "$BUILD_DIR" -j8
 pass "Default build succeeds"
 
 ELF_FILE="$BUILD_DIR/zephyr/zephyr.elf"
@@ -63,16 +83,19 @@ fi
 echo "-- [3/5] Build CAN-off configuration"
 cat > "$OVERLAY_FILE" <<EOF
 CONFIG_RM_TEST_RUNTIME_INIT_CAN=n
+CONFIG_RM_TEST_MODULE_CHASSIS=n
+CONFIG_RM_TEST_MODULE_ARM=n
+CONFIG_RM_TEST_MODULE_GANTRY=n
 EOF
 
 PYTHON_BIN="${WS_DIR}/.venv/bin/python"
 if [[ -x "$PYTHON_BIN" ]]; then
-  cmake -S "$ROOT_DIR" -B "$TMP_BUILD_DIR" -GNinja -DBOARD="$BOARD" -DPython3_EXECUTABLE="$PYTHON_BIN" -DOVERLAY_CONFIG="$OVERLAY_FILE" >/dev/null
+  run_cmd "configure_can_off" cmake -S "$ROOT_DIR" -B "$TMP_BUILD_DIR" -GNinja -DBOARD="$BOARD" -DPython3_EXECUTABLE="$PYTHON_BIN" -DOVERLAY_CONFIG="$OVERLAY_FILE"
 else
-  cmake -S "$ROOT_DIR" -B "$TMP_BUILD_DIR" -GNinja -DBOARD="$BOARD" -DOVERLAY_CONFIG="$OVERLAY_FILE" >/dev/null
+  run_cmd "configure_can_off" cmake -S "$ROOT_DIR" -B "$TMP_BUILD_DIR" -GNinja -DBOARD="$BOARD" -DOVERLAY_CONFIG="$OVERLAY_FILE"
 fi
 
-cmake --build "$TMP_BUILD_DIR" -j8 >/dev/null
+run_cmd "build_can_off" cmake --build "$TMP_BUILD_DIR" -j8
 pass "CAN-off build succeeds"
 
 CAN_OFF_ELF="$TMP_BUILD_DIR/zephyr/zephyr.elf"

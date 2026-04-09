@@ -9,6 +9,8 @@
 namespace {
 
 K_THREAD_STACK_DEFINE(g_gimbal_module_stack, 1024);
+constexpr bool kBaselineTraceEnabled = true;
+constexpr uint32_t kBaselineTracePeriod = 500U;
 
 }  // namespace
 
@@ -19,9 +21,38 @@ int GimbalModule::Initialize()
 	started_ = false;
 	servo_ready_ =
 		(rm_test::platform::drivers::devices::actuators::serial_servo::Initialize() == 0);
+	servo_stopped_ = false;
+	yaw_servo_online_ = false;
+	pitch_servo_online_ = false;
+	command_enable_ = 0U;
+	idle_ticks_ = 0U;
+	yaw_servo_id_ = kDefaultYawServoId;
+	pitch_servo_id_ = kDefaultPitchServoId;
 	yaw_angle_deg_ = 0.0f;
 	pitch_angle_deg_ = 0.0f;
 	state_sequence_ = 0U;
+
+	if (servo_ready_) {
+		uint8_t found = 0U;
+		if (rm_test::platform::drivers::devices::actuators::serial_servo::ReadId(
+			    yaw_servo_id_, &found, 120U) == 0) {
+			yaw_servo_id_ = found;
+			yaw_servo_online_ = true;
+		}
+		if (rm_test::platform::drivers::devices::actuators::serial_servo::ReadId(
+			    pitch_servo_id_, &found, 120U) == 0) {
+			pitch_servo_id_ = found;
+			pitch_servo_online_ = true;
+		}
+
+		if (!yaw_servo_online_ && !pitch_servo_online_) {
+			if (rm_test::platform::drivers::devices::actuators::serial_servo::ReadId(
+				    0xFEU, &found, 200U) == 0) {
+				yaw_servo_id_ = found;
+				yaw_servo_online_ = true;
+			}
+		}
+	}
 	return 0;
 }
 
@@ -65,6 +96,9 @@ void GimbalModule::SetPitchAngle(float degrees)
 
 void GimbalModule::HandleCommand(const channels::GimbalCommandMessage &command)
 {
+	command_enable_ = command.enable;
+	idle_ticks_ = 0U;
+
 	if (command.enable == 0U) {
 		return;
 	}
@@ -82,19 +116,41 @@ void GimbalModule::RunLoop()
 	while (true) {
 		if (zbus_chan_read(&rm_test_gimbal_command_chan, &command, K_NO_WAIT) == 0) {
 			HandleCommand(command);
+		} else {
+			++idle_ticks_;
+			if (idle_ticks_ > kNoCommandStopTicks) {
+				command_enable_ = 0U;
+			}
 		}
 
 		if (servo_ready_) {
-			const float yaw_servo_angle = yaw_angle_deg_ + 120.0f;
-			const float pitch_servo_angle = pitch_angle_deg_ + 90.0f;
-			(void)rm_test::platform::drivers::devices::actuators::serial_servo::MoveToAngle(
-				kYawServoId,
-				yaw_servo_angle,
-				kServoMoveTimeMs);
-			(void)rm_test::platform::drivers::devices::actuators::serial_servo::MoveToAngle(
-				kPitchServoId,
-				pitch_servo_angle,
-				kServoMoveTimeMs);
+			if (command_enable_ == 0U) {
+				if (!servo_stopped_) {
+					if (yaw_servo_online_) {
+						(void)rm_test::platform::drivers::devices::actuators::serial_servo::Stop(yaw_servo_id_);
+					}
+					if (pitch_servo_online_) {
+						(void)rm_test::platform::drivers::devices::actuators::serial_servo::Stop(pitch_servo_id_);
+					}
+					servo_stopped_ = true;
+				}
+			} else {
+				const float yaw_servo_angle = yaw_angle_deg_ + 120.0f;
+				const float pitch_servo_angle = pitch_angle_deg_ + 90.0f;
+				if (yaw_servo_online_) {
+					(void)rm_test::platform::drivers::devices::actuators::serial_servo::MoveToAngle(
+						yaw_servo_id_,
+						yaw_servo_angle,
+						kServoMoveTimeMs);
+				}
+				if (pitch_servo_online_) {
+					(void)rm_test::platform::drivers::devices::actuators::serial_servo::MoveToAngle(
+						pitch_servo_id_,
+						pitch_servo_angle,
+						kServoMoveTimeMs);
+				}
+				servo_stopped_ = false;
+			}
 		}
 
 		state.yaw_angle_deg = yaw_angle_deg_;
@@ -102,6 +158,18 @@ void GimbalModule::RunLoop()
 		state.servo_ready = servo_ready_ ? 1U : 0U;
 		state.sequence = ++state_sequence_;
 		(void)zbus_chan_pub(&rm_test_gimbal_state_chan, &state, K_NO_WAIT);
+
+		if (kBaselineTraceEnabled && ((state_sequence_ % kBaselineTracePeriod) == 0U)) {
+			printk("[baseline][gimbal] yaw=%.2f pitch=%.2f en=%u idle=%u yid=%u pid=%u yon=%u pon=%u\n",
+			       static_cast<double>(yaw_angle_deg_),
+			       static_cast<double>(pitch_angle_deg_),
+			       static_cast<unsigned int>(command_enable_),
+			       static_cast<unsigned int>(idle_ticks_),
+			       static_cast<unsigned int>(yaw_servo_id_),
+			       static_cast<unsigned int>(pitch_servo_id_),
+			       yaw_servo_online_ ? 1U : 0U,
+			       pitch_servo_online_ ? 1U : 0U);
+		}
 		k_sleep(K_MSEC(2));
 	}
 }

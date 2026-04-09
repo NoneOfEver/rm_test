@@ -164,7 +164,6 @@ applications/rm_test/
       referee_state_channel.h
       motor_feedback_channel.h
     protocols/
-      mcu_link/
       pc_link/
     algorithms/
       ...
@@ -257,7 +256,7 @@ applications/rm_test/
 - 放弃自建 `app/pubsub/`，改为使用官方 `zbus`
 - 保留 `app/channels/` 作为消息类型定义层
 - 将设备占位命名从旧 `dvc_*` 风格切到角色命名
-- 维持 `app/protocols/mcu_link`、`app/protocols/pc_link` 作为新的链路层命名
+- 维持 `app/protocols/pc_link` 作为链路层命名
 
 补充说明：
 
