@@ -21,6 +21,9 @@ int DequeueForRemoteInput(UartRawFrameMessage *frame);
 int EnqueueForReferee(const UartRawFrameMessage *frame);
 int DequeueForReferee(UartRawFrameMessage *frame);
 
+int EnqueueForMavlink(const UartRawFrameMessage *frame);
+int DequeueForMavlink(UartRawFrameMessage *frame);
+
 }  // namespace rm_test::app::channels::uart_raw_frame_queue
 
 #endif /* RM_TEST_APP_CHANNELS_UART_RAW_FRAME_QUEUE_H_ */

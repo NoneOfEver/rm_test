@@ -68,6 +68,7 @@ void RouteUartBytesToModuleQueues(const uint8_t *data, size_t len)
 
 		(void)rm_test::app::channels::uart_raw_frame_queue::EnqueueForRemoteInput(&msg);
 		(void)rm_test::app::channels::uart_raw_frame_queue::EnqueueForReferee(&msg);
+		(void)rm_test::app::channels::uart_raw_frame_queue::EnqueueForMavlink(&msg);
 	}
 }
 

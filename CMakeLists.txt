@@ -13,6 +13,12 @@ target_include_directories(app PRIVATE
   ${HPM_SDK_DIR}/middleware/hpm_math/nds_dsp
 )
 
+if(CONFIG_RM_TEST_SHELL_MAVLINK_CONTROL)
+  target_include_directories(app PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../mavlink/generated/include
+  )
+endif()
+
 target_link_libraries(app PRIVATE
   ${HPM_SDK_DIR}/middleware/hpm_math/nds_dsp/gcc/libdsp.a
 )

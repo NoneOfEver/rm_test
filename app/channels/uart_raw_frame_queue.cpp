@@ -18,6 +18,10 @@ K_MSGQ_DEFINE(g_referee_uart_raw_msgq,
 	     sizeof(rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage),
 	     kQueueDepth,
 	     4);
+K_MSGQ_DEFINE(g_mavlink_uart_raw_msgq,
+	     sizeof(rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage),
+	     kQueueDepth,
+	     4);
 
 int Enqueue(struct k_msgq *msgq,
 	    const rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage *frame)
@@ -61,6 +65,16 @@ int EnqueueForReferee(const UartRawFrameMessage *frame)
 int DequeueForReferee(UartRawFrameMessage *frame)
 {
 	return Dequeue(&g_referee_uart_raw_msgq, frame);
+}
+
+int EnqueueForMavlink(const UartRawFrameMessage *frame)
+{
+	return Enqueue(&g_mavlink_uart_raw_msgq, frame);
+}
+
+int DequeueForMavlink(UartRawFrameMessage *frame)
+{
+	return Dequeue(&g_mavlink_uart_raw_msgq, frame);
 }
 
 }  // namespace rm_test::app::channels::uart_raw_frame_queue
