@@ -12,7 +12,7 @@
 #include <app/modules/gimbal/gimbal_module.h>
 #include <app/modules/referee/referee_module.h>
 #include <app/modules/remote_input/remote_input_module.h>
-#include <app/modules/rgb_led/rgb_led_module.h>
+#include <app/modules/sys_state/sys_state_module.h>
 #include <app/bootstrap/module_manager.h>
 #include <app/bootstrap/module_registry_hook.h>
 
@@ -24,7 +24,7 @@ rm_test::app::modules::arm::ArmModule g_arm_module;
 rm_test::app::modules::gimbal::GimbalModule g_gimbal_module;
 rm_test::app::modules::gantry::GantryModule g_gantry_module;
 rm_test::app::modules::referee::RefereeModule g_referee_module;
-rm_test::app::modules::rgb_led::RgbLedModule g_rgb_led_module;
+rm_test::app::modules::sys_state::SysStateModule g_sys_state_module;
 
 }  // namespace
 
@@ -34,6 +34,14 @@ int RegisterApplicationModules(ModuleManager *manager)
 {
 	if (manager == nullptr) {
 		return -EINVAL;
+	}
+
+	/* Keep status indicator first so board state is visible even if later modules fail. */
+	if (IS_ENABLED(CONFIG_RM_TEST_MODULE_SYS_STATE)) {
+		const int rc = manager->Register(g_sys_state_module);
+		if (rc != 0) {
+			return rc;
+		}
 	}
 
 	if (IS_ENABLED(CONFIG_RM_TEST_MODULE_REMOTE_INPUT)) {
@@ -73,13 +81,6 @@ int RegisterApplicationModules(ModuleManager *manager)
 
 	if (IS_ENABLED(CONFIG_RM_TEST_MODULE_REFEREE)) {
 		const int rc = manager->Register(g_referee_module);
-		if (rc != 0) {
-			return rc;
-		}
-	}
-
-	if (IS_ENABLED(CONFIG_RM_TEST_MODULE_RGB_LED)) {
-		const int rc = manager->Register(g_rgb_led_module);
 		if (rc != 0) {
 			return rc;
 		}

@@ -40,12 +40,13 @@ config RM_TEST_MODULE_REFEREE
 	help
 	  Enable registering and starting the referee module.
 
-config RM_TEST_MODULE_RGB_LED
-	bool "Enable rgb_led module"
+config RM_TEST_MODULE_SYS_STATE
+	bool "Enable status indicator module"
 	default y
-	depends on GPIO
+	depends on GPIO || PWM
 	help
-	  Enable registering and starting the RGB breathing LED module.
+	  Enable registering and starting the system status indicator module.
+	  The module supports RGB breathing LED and optional PWM buzzer output.
 
 config RM_TEST_SHELL_CHASSIS_TUNING
 	bool "Enable chassis tuning shell commands"
@@ -53,6 +54,14 @@ config RM_TEST_SHELL_CHASSIS_TUNING
 	depends on SHELL
 	help
 	  Enable chassis pid get/set/save/load/reset_i shell commands.
+
+config RM_TEST_SHELL_MAVLINK_CONTROL
+	bool "Enable MAVLink shell control command"
+	default y
+	depends on SHELL
+	help
+	  Enable `mavlink on/off/status` shell command. When enabled,
+	  MAVLink bytes are received on the same shell UART by using shell bypass.
 
 config RM_TEST_RUNTIME_INIT_UART
 	bool "Initialize UART dispatch in bootstrap"
