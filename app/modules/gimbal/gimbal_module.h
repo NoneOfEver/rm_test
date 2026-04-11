@@ -28,11 +28,12 @@ private:
 	static constexpr uint8_t kDefaultYawServoId = 1U;
 	static constexpr uint8_t kDefaultPitchServoId = 2U;
 	static constexpr uint16_t kServoMoveTimeMs = 20U;
+	static constexpr uint16_t kServoUpdatePeriodMs = 20U;
+	static constexpr float kServoAngleEpsilonDeg = 0.2f;
 	static constexpr uint32_t kNoCommandStopTicks = 100U;
 
 	void RunLoop();
 	void HandleCommand(const channels::GimbalCommandMessage &command);
-	static float Clamp(float value, float lower, float upper);
 
 	struct k_thread thread_;
 	bool started_ = false;
@@ -46,6 +47,11 @@ private:
 	uint8_t pitch_servo_id_ = kDefaultPitchServoId;
 	float yaw_angle_deg_ = 0.0f;
 	float pitch_angle_deg_ = 0.0f;
+	float yaw_last_sent_angle_deg_ = 0.0f;
+	float pitch_last_sent_angle_deg_ = 0.0f;
+	bool yaw_sent_once_ = false;
+	bool pitch_sent_once_ = false;
+	int64_t next_servo_send_ms_ = 0;
 	uint32_t state_sequence_ = 0U;
 };
 

@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include <algorithm>
+#include <cmath>
+
 #include <zephyr/sys/printk.h>
 
 #include <app/bootstrap/thread_utils.h>
@@ -30,6 +33,11 @@ int GimbalModule::Initialize()
 	pitch_servo_id_ = kDefaultPitchServoId;
 	yaw_angle_deg_ = 0.0f;
 	pitch_angle_deg_ = 0.0f;
+	yaw_last_sent_angle_deg_ = 0.0f;
+	pitch_last_sent_angle_deg_ = 0.0f;
+	yaw_sent_once_ = false;
+	pitch_sent_once_ = false;
+	next_servo_send_ms_ = 0;
 	state_sequence_ = 0U;
 
 	if (servo_ready_) {
@@ -73,25 +81,14 @@ int GimbalModule::Start()
 	return 0;
 }
 
-float GimbalModule::Clamp(float value, float lower, float upper)
-{
-	if (value < lower) {
-		return lower;
-	}
-	if (value > upper) {
-		return upper;
-	}
-	return value;
-}
-
 void GimbalModule::SetYawAngle(float degrees)
 {
-	yaw_angle_deg_ = Clamp(degrees, kYawMin, kYawMax);
+	yaw_angle_deg_ = std::clamp(degrees, kYawMin, kYawMax);
 }
 
 void GimbalModule::SetPitchAngle(float degrees)
 {
-	pitch_angle_deg_ = Clamp(degrees, kPitchMin, kPitchMax);
+	pitch_angle_deg_ = std::clamp(degrees, kPitchMin, kPitchMax);
 }
 
 void GimbalModule::HandleCommand(const channels::GimbalCommandMessage &command)
@@ -133,21 +130,42 @@ void GimbalModule::RunLoop()
 						(void)rm_test::platform::drivers::devices::actuators::serial_servo::Stop(pitch_servo_id_);
 					}
 					servo_stopped_ = true;
+					yaw_sent_once_ = false;
+					pitch_sent_once_ = false;
 				}
 			} else {
-				const float yaw_servo_angle = yaw_angle_deg_ + 120.0f;
-				const float pitch_servo_angle = pitch_angle_deg_ + 90.0f;
-				if (yaw_servo_online_) {
-					(void)rm_test::platform::drivers::devices::actuators::serial_servo::MoveToAngle(
-						yaw_servo_id_,
-						yaw_servo_angle,
-						kServoMoveTimeMs);
-				}
-				if (pitch_servo_online_) {
-					(void)rm_test::platform::drivers::devices::actuators::serial_servo::MoveToAngle(
-						pitch_servo_id_,
-						pitch_servo_angle,
-						kServoMoveTimeMs);
+				const int64_t now_ms = k_uptime_get();
+				if (now_ms >= next_servo_send_ms_) {
+					const float yaw_servo_angle = yaw_angle_deg_ + 120.0f;
+					const float pitch_servo_angle = pitch_angle_deg_ + 90.0f;
+
+					if (yaw_servo_online_) {
+						if (!yaw_sent_once_ ||
+						    (std::fabs(yaw_servo_angle - yaw_last_sent_angle_deg_) >=
+						     kServoAngleEpsilonDeg)) {
+							(void)rm_test::platform::drivers::devices::actuators::serial_servo::MoveToAngle(
+								yaw_servo_id_,
+								yaw_servo_angle,
+								kServoMoveTimeMs);
+							yaw_last_sent_angle_deg_ = yaw_servo_angle;
+							yaw_sent_once_ = true;
+						}
+					}
+
+					if (pitch_servo_online_) {
+						if (!pitch_sent_once_ ||
+						    (std::fabs(pitch_servo_angle - pitch_last_sent_angle_deg_) >=
+						     kServoAngleEpsilonDeg)) {
+							(void)rm_test::platform::drivers::devices::actuators::serial_servo::MoveToAngle(
+								pitch_servo_id_,
+								pitch_servo_angle,
+								kServoMoveTimeMs);
+							pitch_last_sent_angle_deg_ = pitch_servo_angle;
+							pitch_sent_once_ = true;
+						}
+					}
+
+					next_servo_send_ms_ = now_ms + kServoUpdatePeriodMs;
 				}
 				servo_stopped_ = false;
 			}

@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include <algorithm>
+
 #include <math.h>
 
 #include <zephyr/sys/printk.h>
@@ -16,6 +18,7 @@ namespace {
 K_THREAD_STACK_DEFINE(g_gantry_module_stack, 1024);
 constexpr bool kBaselineTraceEnabled = false;
 constexpr uint32_t kBaselineTracePeriod = 500U;
+constexpr int kMaxFramesPerTick = 8;
 
 float UIntToFloat(uint16_t raw, float min_value, float max_value, uint8_t bits)
 {
@@ -84,30 +87,19 @@ int GantryModule::Start()
 	return 0;
 }
 
-float GantryModule::Clamp(float value, float lower, float upper)
-{
-	if (value < lower) {
-		return lower;
-	}
-	if (value > upper) {
-		return upper;
-	}
-	return value;
-}
-
 void GantryModule::XAxisMoveInDistance(float distance)
 {
-	x_axis_virtual_distance_ = Clamp(distance, -kXAxisLimit, kXAxisLimit);
+	x_axis_virtual_distance_ = std::clamp(distance, -kXAxisLimit, kXAxisLimit);
 }
 
 void GantryModule::YAxisMoveInDistance(float distance)
 {
-	y_axis_virtual_distance_ = Clamp(distance, -kYAxisLimit, kYAxisLimit);
+	y_axis_virtual_distance_ = std::clamp(distance, -kYAxisLimit, kYAxisLimit);
 }
 
 void GantryModule::ZAxisMoveInDistance(float distance)
 {
-	z_axis_virtual_distance_ = Clamp(distance, -kZAxisLimit, kZAxisLimit);
+	z_axis_virtual_distance_ = std::clamp(distance, -kZAxisLimit, kZAxisLimit);
 }
 
 void GantryModule::HandleCommand(const channels::GantryCommandMessage &command)
@@ -115,6 +107,7 @@ void GantryModule::HandleCommand(const channels::GantryCommandMessage &command)
 	if (command.enable == 0U) {
 		x_axis_virtual_distance_ = 0.0f;
 		y_axis_virtual_distance_ = 0.0f;
+		z_axis_virtual_distance_ = 0.0f;
 		return;
 	}
 
@@ -157,7 +150,9 @@ void GantryModule::SendCubemarsStartupSequence()
 
 void GantryModule::DecodeCanFramesInQueue()
 {
-	while (true) {
+	constexpr int kMaxFramesPerTick = 8;
+	int frames_processed = 0;
+	while (frames_processed < kMaxFramesPerTick) {
 		rm_test::app::channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
 		if (rm_test::app::channels::can_raw_frame_queue::DequeueForGantry(&frame) != 0) {
 			break;
@@ -174,7 +169,7 @@ void GantryModule::DecodeCanFramesInQueue()
 					x_right_feedback_.valid = true;
 				}
 			}
-			continue;
+			++frames_processed;
 		}
 
 		if ((frame.bus == 3U) && (frame.can_id == kDjiYCanId)) {
@@ -183,7 +178,7 @@ void GantryModule::DecodeCanFramesInQueue()
 				y_feedback_.omega = dji.omega;
 				y_feedback_.valid = true;
 			}
-			continue;
+			++frames_processed;
 		}
 
 		if (frame.can_id == kCubemarsCanId) {
@@ -206,17 +201,18 @@ void GantryModule::DecodeCanFramesInQueue()
 				state->valid = true;
 			}
 		}
+		frames_processed++;
 	}
 }
 
 void GantryModule::ApplyControlAndSend()
 {
-	const float x_target_omega = Clamp(x_axis_virtual_distance_ * kDistanceToSpeedKp,
-					 -kXAxisSpeedLimit,
-					 kXAxisSpeedLimit);
-	const float y_target_omega = Clamp(y_axis_virtual_distance_ * kDistanceToSpeedKp,
-					 -kYAxisSpeedLimit,
-					 kYAxisSpeedLimit);
+	const float x_target_omega = std::clamp(x_axis_virtual_distance_ * kDistanceToSpeedKp,
+					      -kXAxisSpeedLimit,
+					      kXAxisSpeedLimit);
+	const float y_target_omega = std::clamp(y_axis_virtual_distance_ * kDistanceToSpeedKp,
+					      -kYAxisSpeedLimit,
+					      kYAxisSpeedLimit);
 
 	int16_t can2_current[4] = {0, 0, 0, 0};
 	if (x_left_feedback_.valid) {
@@ -245,14 +241,14 @@ void GantryModule::ApplyControlAndSend()
 	const float z_target_left_angle = -(z_axis_virtual_distance_ * kZAxisRadPerDistance);
 	const float z_target_right_angle = +(z_axis_virtual_distance_ * kZAxisRadPerDistance);
 	const float z_left_omega = z_left_state_.valid
-					 ? Clamp(z_left_pid_angle_.update(z_target_left_angle, z_left_state_.angle),
-						 -kZAxisSpeedLimit,
-						 kZAxisSpeedLimit)
+					 ? std::clamp(z_left_pid_angle_.update(z_target_left_angle, z_left_state_.angle),
+						      -kZAxisSpeedLimit,
+						      kZAxisSpeedLimit)
 					 : 0.0f;
 	const float z_right_omega = z_right_state_.valid
-					  ? Clamp(z_right_pid_angle_.update(z_target_right_angle, z_right_state_.angle),
-						  -kZAxisSpeedLimit,
-						  kZAxisSpeedLimit)
+					  ? std::clamp(z_right_pid_angle_.update(z_target_right_angle, z_right_state_.angle),
+						       -kZAxisSpeedLimit,
+						       kZAxisSpeedLimit)
 					  : 0.0f;
 
 	rm_test::app::protocols::motors::cubemars::CubemarsMitRange z_range = {
@@ -313,8 +309,27 @@ void GantryModule::RunLoop()
 	while (true) {
 		DecodeCanFramesInQueue();
 
+		bool has_command = false;
 		if (zbus_chan_read(&rm_test_gantry_command_chan, &command, K_NO_WAIT) == 0) {
 			HandleCommand(command);
+			has_command = true;
+		}
+
+		if (command.enable == 0U) {
+			if (kBaselineTraceEnabled && ((++tick % kBaselineTracePeriod) == 0U)) {
+				printk("[baseline][gantry] virt=(%.3f %.3f %.3f) x=(%d %d) y=%d z=(%.2f %.2f) en=%u\n",
+				       static_cast<double>(x_axis_virtual_distance_),
+				       static_cast<double>(y_axis_virtual_distance_),
+				       static_cast<double>(z_axis_virtual_distance_),
+				       static_cast<int>(x_left_feedback_.omega),
+				       static_cast<int>(x_right_feedback_.omega),
+				       static_cast<int>(y_feedback_.omega),
+				       static_cast<double>(z_left_state_.angle),
+				       static_cast<double>(z_right_state_.angle),
+				       static_cast<unsigned int>(command.enable));
+			}
+			k_sleep(K_MSEC(10));
+			continue;
 		}
 
 		ApplyControlAndSend();

@@ -46,7 +46,6 @@ private:
 	void DecodeCanFramesInQueue();
 	void ApplyWheelSpeedPidAndSend();
 	void ResetTargetsAndPid();
-	static float Clamp(float value, float lower, float upper);
 
 	struct k_thread thread_;
 	bool started_ = false;

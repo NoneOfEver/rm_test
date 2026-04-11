@@ -61,7 +61,6 @@ private:
 	void SendDmStartupSequence();
 	void DecodeCanFramesInQueue();
 	void ApplyWristSpeedPidAndSend();
-	static float Clamp(float value, float lower, float upper);
 
 	struct k_thread thread_;
 	bool started_ = false;

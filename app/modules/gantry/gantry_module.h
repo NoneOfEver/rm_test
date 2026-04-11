@@ -48,7 +48,6 @@ private:
 	void DecodeCanFramesInQueue();
 	void ApplyControlAndSend();
 	void SendCubemarsStartupSequence();
-	static float Clamp(float value, float lower, float upper);
 
 	struct DjiFeedbackSimple {
 		int16_t omega = 0;

@@ -4,6 +4,8 @@
 
 #include <zephyr/sys/printk.h>
 
+#include <algorithm>
+
 #include <app/bootstrap/thread_utils.h>
 #include <app/modules/chassis/chassis_module.h>
 #include <app/protocols/motors/dji_motor_protocol.h>
@@ -40,17 +42,6 @@ int ChassisModule::Initialize()
 	}
 
 	return SetSpeedPidTuning(kPidKp, kPidKi, kPidKd, kIntegralLimit, kCurrentLimit);
-}
-
-float ChassisModule::Clamp(float value, float lower, float upper)
-{
-	if (value < lower) {
-		return lower;
-	}
-	if (value > upper) {
-		return upper;
-	}
-	return value;
 }
 
 void ChassisModule::ResetTargetsAndPid()
@@ -199,23 +190,23 @@ void ChassisModule::DecodeCanFramesInQueue()
 
 void ChassisModule::UpdateStateFromCommand(const channels::ChassisCommandMessage &command)
 {
-	const float vx = Clamp(command.target_vx, -kCommandVxLimit, kCommandVxLimit);
-	const float vy = Clamp(command.target_vy, -kCommandVyLimit, kCommandVyLimit);
-	const float wz = Clamp(command.target_wz, -kCommandWzLimit, kCommandWzLimit);
+	const float vx = std::clamp(command.target_vx, -kCommandVxLimit, kCommandVxLimit);
+	const float vy = std::clamp(command.target_vy, -kCommandVyLimit, kCommandVyLimit);
+	const float wz = std::clamp(command.target_wz, -kCommandWzLimit, kCommandWzLimit);
 
-	state_.wheel1_target_omega = Clamp(
+	state_.wheel1_target_omega = std::clamp(
 		(+kKinematicsFactor * vx - kKinematicsFactor * vy) + wz,
 		-kWheelTargetOmegaLimit,
 		kWheelTargetOmegaLimit);
-	state_.wheel2_target_omega = Clamp(
+	state_.wheel2_target_omega = std::clamp(
 		(-kKinematicsFactor * vx - kKinematicsFactor * vy) + wz,
 		-kWheelTargetOmegaLimit,
 		kWheelTargetOmegaLimit);
-	state_.wheel3_target_omega = Clamp(
+	state_.wheel3_target_omega = std::clamp(
 		(-kKinematicsFactor * vx + kKinematicsFactor * vy) + wz,
 		-kWheelTargetOmegaLimit,
 		kWheelTargetOmegaLimit);
-	state_.wheel4_target_omega = Clamp(
+	state_.wheel4_target_omega = std::clamp(
 		(+kKinematicsFactor * vx + kKinematicsFactor * vy) + wz,
 		-kWheelTargetOmegaLimit,
 		kWheelTargetOmegaLimit);

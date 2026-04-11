@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include <errno.h>
+#include <algorithm>
 #include <math.h>
 
 #include <zephyr/sys/printk.h>
@@ -122,20 +123,9 @@ int ArmModule::Start()
 	return 0;
 }
 
-float ArmModule::Clamp(float value, float lower, float upper)
-{
-	if (value < lower) {
-		return lower;
-	}
-	if (value > upper) {
-		return upper;
-	}
-	return value;
-}
-
 void ArmModule::ControlClaw(float virtual_angle)
 {
-	float angle = Clamp(virtual_angle, -kClawLimit, kClawLimit);
+	float angle = std::clamp(virtual_angle, -kClawLimit, kClawLimit);
 
 	if ((angle < claws_virtual_angle_) && dm_feedback_claw_valid_) {
 		const float now_torque_a = static_cast<float>(dm_feedback_claw_.current_ma) / 1000.0f;
@@ -149,22 +139,21 @@ void ArmModule::ControlClaw(float virtual_angle)
 
 void ArmModule::ControlElbowPitchJoint(float virtual_angle)
 {
-	elbow_pitch_joint_virtual_angle_ = Clamp(virtual_angle, -kElbowPitchLimit, kElbowPitchLimit);
+	elbow_pitch_joint_virtual_angle_ =
+		std::clamp(virtual_angle, -kElbowPitchLimit, kElbowPitchLimit);
 }
 
 void ArmModule::ControlElbowYawJoint(float virtual_angle)
 {
-	elbow_yaw_joint_virtual_angle_ = Clamp(virtual_angle, -kElbowYawLimit, kElbowYawLimit);
+	elbow_yaw_joint_virtual_angle_ = std::clamp(virtual_angle, -kElbowYawLimit, kElbowYawLimit);
 }
 
 void ArmModule::ControlWristByTwistFlip(float twist_delta, float flip_delta)
 {
 	wrist_joint_left_virtual_angle_ += flip_delta + twist_delta;
 	wrist_joint_right_virtual_angle_ += flip_delta - twist_delta;
-	wrist_joint_left_virtual_angle_ =
-		Clamp(wrist_joint_left_virtual_angle_, -kWristLimit, kWristLimit);
-	wrist_joint_right_virtual_angle_ =
-		Clamp(wrist_joint_right_virtual_angle_, -kWristLimit, kWristLimit);
+	wrist_joint_left_virtual_angle_ = std::clamp(wrist_joint_left_virtual_angle_, -kWristLimit, kWristLimit);
+	wrist_joint_right_virtual_angle_ = std::clamp(wrist_joint_right_virtual_angle_, -kWristLimit, kWristLimit);
 }
 
 void ArmModule::HandleCommand(const channels::ArmCommandMessage &command)

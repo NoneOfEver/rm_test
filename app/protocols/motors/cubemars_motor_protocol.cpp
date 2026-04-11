@@ -4,26 +4,17 @@
 
 #include <errno.h>
 
+#include <algorithm>
+
 #include <app/protocols/motors/cubemars_motor_protocol.h>
 
 namespace rm_test::app::protocols::motors::cubemars {
 
 namespace {
 
-float Clamp(float value, float min_value, float max_value)
-{
-	if (value < min_value) {
-		return min_value;
-	}
-	if (value > max_value) {
-		return max_value;
-	}
-	return value;
-}
-
 uint16_t FloatToUInt(float value, float min_value, float max_value, uint8_t bits)
 {
-	const float v = Clamp(value, min_value, max_value);
+	const float v = std::clamp(value, min_value, max_value);
 	const float span = max_value - min_value;
 	const float scaled = (v - min_value) * (static_cast<float>((1U << bits) - 1U)) / span;
 	return static_cast<uint16_t>(scaled + 0.5f);
