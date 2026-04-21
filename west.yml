@@ -20,6 +20,10 @@ manifest:
       url-base: https://github.com/cherry-embedded/
     - name: upstream
       url-base: https://github.com/zephyrproject-rtos
+    - name: dust-mavlink
+      url-base: https://github.com/NoneOfEver
+    - name: dust-hpm
+      url-base: https://github.com/NoneOfEver
 
   defaults:
     remote: github
@@ -34,10 +38,11 @@ manifest:
       import: true
 
     # HPMicro SDK (manifest repo with boards, drivers, soc, dts)
-    - name: sdk_glue
-      repo-path: zephyr_sdk_glue
-      path: sdk_glue
-      revision: manifest-rev
+    - name: hpm_support
+      remote: dust-hpm
+      repo-path: hpm_support
+      path: hpm_support
+      revision: main
 
     # HPMicro-specific modules (not in upstream zephyr)
     - name: canopennode
@@ -67,9 +72,9 @@ manifest:
       path: bootloader/mcuboot
 
     # Mavlink generated headers
-    - name: mavlink
-      remote: https://github.com/NoneOfEver/dust_mavlink.git
-      repo-path: dust_mavlink  # 或你的mavlink仓库名
+    - name: dust_mavlink
+      remote: dust-mavlink
+      repo-path: dust_mavlink
       path: mavlink
       revision: 727cb08cb91ce0ad77f1fbf8e30f94c92644886a
 
