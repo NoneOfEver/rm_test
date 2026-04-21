@@ -48,7 +48,7 @@ manifest:
     - name: canopennode
       repo-path: canopennode
       path: modules/lib/canopennode
-      revision: dec12fa3f0d790cafa8414a2930ea71ab72ffd
+      revision: dec12fa3f0d790cafa8414a4c2930ea71ab72ffd
 
     - name: lvgl
       repo-path: zephyr_lvgl
