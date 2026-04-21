@@ -2,7 +2,14 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 
+# T2: sdk_glue is a project, not manifest repo.
+# Compute paths relative to rm_test location (workspace root).
+set(HPM_ZEPHYR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../sdk_glue)
+set(HPM_SDK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../sdk_env/hpm_sdk)
+set(HPM_ENV_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../sdk_env)
+
 list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
+list(APPEND BOARD_ROOT ${HPM_ZEPHYR_DIR})
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(rm_test)
@@ -14,9 +21,7 @@ target_include_directories(app PRIVATE
 )
 
 if(CONFIG_RM_TEST_SHELL_MAVLINK_CONTROL)
-  target_include_directories(app PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../mavlink/generated/include
-  )
+  target_link_libraries(app PRIVATE mavlink)
 endif()
 
 target_link_libraries(app PRIVATE
