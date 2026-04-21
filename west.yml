@@ -76,7 +76,7 @@ manifest:
       remote: dust-mavlink
       repo-path: dust_mavlink
       path: mavlink
-      revision: 727cb08cb91ce0ad77f1fbf8e30f94c92644886a
+      revision: main
 
   self:
     path: rm_test
