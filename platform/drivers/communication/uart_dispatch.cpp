@@ -9,7 +9,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
-#include <app/channels/uart_raw_frame_queue.h>
+#include <channels/uart_raw_frame_queue.h>
 
 #include "uart_dispatch.h"
 

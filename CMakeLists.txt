@@ -16,7 +16,14 @@ project(rm_test)
 
 target_include_directories(app PRIVATE
   .
-  app/algorithms
+  /Users/panpoming/Documents/rm_test_ws
+  /Users/panpoming/Documents/rm_test_ws/algorithms
+  bootstrap
+  channels
+  modules
+  protocols
+  services
+  debug
   ${HPM_SDK_DIR}/middleware/hpm_math/nds_dsp
 )
 
@@ -25,6 +32,7 @@ if(CONFIG_RM_TEST_SHELL_MAVLINK_CONTROL)
 endif()
 
 target_link_libraries(app PRIVATE
+  algorithms
   ${HPM_SDK_DIR}/middleware/hpm_math/nds_dsp/gcc/libdsp.a
 )
 
@@ -38,5 +46,13 @@ target_sources(app PRIVATE
   src/main.cpp
 )
 
-add_subdirectory(app)
+add_subdirectory(../algorithms algorithms)
+
+add_subdirectory(src)
+add_subdirectory(bootstrap)
+add_subdirectory(services)
+add_subdirectory(modules)
+add_subdirectory(channels)
+add_subdirectory(protocols)
+add_subdirectory(debug)
 add_subdirectory(platform)

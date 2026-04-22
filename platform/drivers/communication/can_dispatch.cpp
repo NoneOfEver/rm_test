@@ -8,7 +8,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
-#include <app/channels/can_raw_frame_queue.h>
+#include <channels/can_raw_frame_queue.h>
 
 #include "can_dispatch.h"
 

@@ -69,5 +69,12 @@ manifest:
       path: mavlink
       revision: main
 
+    # Algorithms library
+    - name: dust_algorithms
+      remote: dust-hpm
+      repo-path: dust_algorithms
+      path: algorithms
+      revision: main
+
   self:
     path: rm_test

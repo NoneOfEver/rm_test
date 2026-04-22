@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <app/channels/referee_state_channel.h>
+#include <channels/referee_state_channel.h>
 
 namespace rm_test::platform::drivers::devices::system::referee_client {
 
