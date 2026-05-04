@@ -79,4 +79,4 @@ manifest:
       revision: main
 
   self:
-    path: rm_test
+    path: wbr_control

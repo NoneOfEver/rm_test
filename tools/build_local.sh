@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build rm_test into applications/rm_test/build so the app folder is self-contained.
+# Build wbr_control into applications/wbr_control/build so the app folder is self-contained.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 WORKSPACE_DIR="$(cd "${APP_DIR}/../.." && pwd)"

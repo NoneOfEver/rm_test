@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.20.0)
 
 # T2: hpm_support is a project, not manifest repo.
-# Compute paths relative to rm_test location (workspace root).
+# Compute paths relative to wbr_control location (workspace root).
 set(HPM_ZEPHYR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../hpm_support)
 set(HPM_SDK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../sdk_env/hpm_sdk)
 set(HPM_ENV_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../sdk_env)
@@ -12,7 +12,7 @@ list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 list(APPEND BOARD_ROOT ${HPM_ZEPHYR_DIR})
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(rm_test)
+project(wbr_control)
 
 target_include_directories(app PRIVATE
   .
