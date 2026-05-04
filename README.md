@@ -1,4 +1,4 @@
-# wbr_control 项目简介
+## wbr_control 项目简介
 
 设计并实现一套面向复杂地形的串联型轮腿机器人控制系统（整车约 25 kg），完成从状态估计、运动控制到视觉感知与决策的全链路闭环开发。
 
@@ -17,3 +17,59 @@
 
 - 核间通信延迟 < 10 μs
 - 调参响应时间 < 20 ms
+
+## 分层架构
+
+| 层级 | 职责 |
+|------|------|
+| `src/` | Zephyr 入口，`main()` 仅做启动转发 |
+| `bootstrap/` | 启动编排、模块注册与拉起 |
+| `modules/` | 业务模块（remote_input、chassis 等） |
+| `services/` | 执行器抽象、调参服务、运行时初始化 |
+| `channels/` | zbus 消息主题定义 |
+| `protocols/` | 电机协议（DJI、DM、Cubemars） |
+| `platform/` | 板级、驱动、存储适配 |
+| `debug/shell/` | Shell 调试命令 |
+
+---
+
+## 主要链路
+
+```
+uart_dispatch 收到遥控器数据
+    ↓
+remote_input_module 解析并发布 zbus channel
+    ↓
+chassis_module 订阅并计算，发布底盘指令
+    ↓
+actuator_service 转换为 CAN 帧下发到电机
+```
+
+---
+
+## 快速上手
+
+### 环境搭建
+```bash
+# 1. 安装 Python 虚拟环境和 West
+python -m venv .venv
+source .venv/bin/activate  # 或 .venv\Scripts\activate
+pip install west
+
+# 2. 新建 workspace 并 clone 工程
+mkdir rm_test_ws
+cd wbr_control_ws
+west init -m https://github.com/NoneOfEver/wbr_control.git
+
+# 3. 拉取依赖
+west update
+```
+
+### 构建与烧录
+```bash
+# 构建
+west build -p always -b hpm6e00evk_v2 -s .
+
+# 烧录
+west flash
+```
